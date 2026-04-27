@@ -1,4 +1,5 @@
 using System.Drawing.Imaging;
+using System.Drawing.Drawing2D;
 
 namespace Xenon2Modern;
 
@@ -18,6 +19,20 @@ public sealed class GameAssets : IDisposable
     }
 
     private sealed record MapDecodeCandidate(string Name, byte[] Data, int TrailingBytes);
+
+    private sealed record LegacySpriteRecord(int Offset, ushort[] Header, int WidthHint, int Height, int MaskPopcount, Bitmap Image);
+
+    private sealed record LegacySpriteMetric(int Offset, Bitmap Image, int Width, int Height, int OpaquePixels, double FillRatio, double VerticalSymmetry);
+
+    private sealed record HardMappedSpriteSpec(int[] Offsets, int TargetWidth, int TargetHeight);
+
+    private static readonly IReadOnlyDictionary<string, HardMappedSpriteSpec> HardMappedSprites =
+        new Dictionary<string, HardMappedSpriteSpec>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["player"] = new HardMappedSpriteSpec([0x07BC, 0x09FC, 0x0C64], 56, 56),
+            ["enemy"] = new HardMappedSpriteSpec([0x2C00, 0x2A04, 0x3CE8], 48, 48),
+            ["bullet"] = new HardMappedSpriteSpec([0x48EC, 0x48E4, 0x48B4, 0x20C8], 12, 24),
+        };
 
     private sealed class TextureField
     {
@@ -97,6 +112,7 @@ public sealed class GameAssets : IDisposable
         var bulletField = new TextureField(dosWeapons, dosSprites);
         var backgroundField = new TextureField(dosMods, dosSprites);
         var explosionField = new TextureField(amigaCode, dosWeapons);
+        var legacyGameplaySprites = SelectLegacyGameplaySprites(dosSprites);
 
         var imported = SpriteImportLayer.LoadOverrides(assetRoot);
         try
@@ -106,11 +122,16 @@ public sealed class GameAssets : IDisposable
             var stageBackgroundTiles = LoadStageBackgroundTiles(catalog);
             var stageBackgroundMaps = LoadStageBackgroundMaps(catalog);
 
-            var player = ApplyOverride(imported, "player", CreatePlayerSprite(playerField));
-            var enemy = ApplyOverride(imported, "enemy", CreateEnemySprite(enemyField));
-            var bullet = ApplyOverride(imported, "bullet", CreateBulletSprite(bulletField));
+            var playerFallback = TakeLegacySpriteOrFallback(legacyGameplaySprites, "player", () => CreatePlayerSprite(playerField));
+            var enemyFallback = TakeLegacySpriteOrFallback(legacyGameplaySprites, "enemy", () => CreateEnemySprite(enemyField));
+            var bulletFallback = TakeLegacySpriteOrFallback(legacyGameplaySprites, "bullet", () => CreateBulletSprite(bulletField));
+            var explosionFallback = TakeLegacySpriteOrFallback(legacyGameplaySprites, "explosion", () => CreateExplosionSprite(explosionField));
+
+            var player = ApplyOverride(imported, "player", playerFallback);
+            var enemy = ApplyOverride(imported, "enemy", enemyFallback);
+            var bullet = ApplyOverride(imported, "bullet", bulletFallback);
             var backgroundTile = ApplyOverride(imported, "background", CreateBackgroundTile(backgroundField));
-            var explosion = ApplyOverride(imported, "explosion", CreateExplosionSprite(explosionField));
+            var explosion = ApplyOverride(imported, "explosion", explosionFallback);
 
             return new GameAssets(
                 player: player,
@@ -127,6 +148,11 @@ public sealed class GameAssets : IDisposable
         finally
         {
             foreach (var bitmap in imported.Values)
+            {
+                bitmap.Dispose();
+            }
+
+            foreach (var bitmap in legacyGameplaySprites.Values)
             {
                 bitmap.Dispose();
             }
@@ -739,6 +765,434 @@ public sealed class GameAssets : IDisposable
         }
 
         return blob.Length % 128;
+    }
+
+    private static Bitmap TakeLegacySpriteOrFallback(
+        IDictionary<string, Bitmap> legacySprites,
+        string key,
+        Func<Bitmap> fallbackFactory)
+    {
+        if (legacySprites.Remove(key, out var sprite))
+        {
+            return sprite;
+        }
+
+        return fallbackFactory();
+    }
+
+    private static Dictionary<string, Bitmap> SelectLegacyGameplaySprites(byte[] spritesBlob)
+    {
+        var selected = new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
+        var records = DecodeLegacySpriteRecords(spritesBlob);
+        if (records.Count == 0)
+        {
+            return selected;
+        }
+
+        try
+        {
+            var usedOffsets = ApplyHardMappedSprites(records, selected);
+            var metrics = BuildLegacySpriteMetrics(records);
+
+            try
+            {
+                var player = selected.ContainsKey("player") ? null : SelectLegacyMetric(
+                    metrics,
+                    usedOffsets,
+                    metric => metric.Width is >= 18 and <= 38
+                              && metric.Height is >= 18 and <= 42
+                              && metric.OpaquePixels >= 80,
+                    metric => (metric.VerticalSymmetry * 1.4)
+                              + (metric.FillRatio * 0.8)
+                              - (Math.Abs(metric.Height - 30) * 0.015)
+                              - (Math.Abs(metric.Width - 26) * 0.02));
+
+                if (player is not null)
+                {
+                    usedOffsets.Add(player.Offset);
+                    selected["player"] = ScaleSpriteNearest(player.Image, 56, 56);
+                }
+
+                var enemy = selected.ContainsKey("enemy") ? null : SelectLegacyMetric(
+                    metrics,
+                    usedOffsets,
+                    metric => metric.Width is >= 14 and <= 36
+                              && metric.Height is >= 10 and <= 34
+                              && metric.OpaquePixels >= 60,
+                    metric => (metric.FillRatio * 1.2)
+                              + ((1d - metric.VerticalSymmetry) * 0.35)
+                              - (Math.Abs(metric.Height - 22) * 0.02));
+
+                if (enemy is not null)
+                {
+                    usedOffsets.Add(enemy.Offset);
+                    selected["enemy"] = ScaleSpriteNearest(enemy.Image, 48, 48);
+                }
+
+                var bullet = selected.ContainsKey("bullet") ? null : SelectLegacyMetric(
+                    metrics,
+                    usedOffsets,
+                    metric => metric.Width is >= 2 and <= 12
+                              && metric.Height is >= 8 and <= 28
+                              && metric.OpaquePixels >= 8,
+                    metric => ((metric.Height - metric.Width) * 0.2)
+                              + (metric.FillRatio * 0.6)
+                              + ((1d - (metric.Width / 12d)) * 0.3));
+
+                if (bullet is not null)
+                {
+                    usedOffsets.Add(bullet.Offset);
+                    selected["bullet"] = ScaleSpriteNearest(bullet.Image, 12, 24);
+                }
+
+                return selected;
+            }
+            finally
+            {
+                foreach (var metric in metrics)
+                {
+                    metric.Image.Dispose();
+                }
+            }
+        }
+        catch
+        {
+            foreach (var bitmap in selected.Values)
+            {
+                bitmap.Dispose();
+            }
+
+            return new Dictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            foreach (var record in records)
+            {
+                record.Image.Dispose();
+            }
+        }
+    }
+
+    private static LegacySpriteMetric? SelectLegacyMetric(
+        IEnumerable<LegacySpriteMetric> metrics,
+        ISet<int> usedOffsets,
+        Func<LegacySpriteMetric, bool> predicate,
+        Func<LegacySpriteMetric, double> score)
+    {
+        return metrics
+            .Where(metric => !usedOffsets.Contains(metric.Offset))
+            .Where(predicate)
+            .OrderByDescending(score)
+            .FirstOrDefault();
+    }
+
+    private static HashSet<int> ApplyHardMappedSprites(IReadOnlyList<LegacySpriteRecord> records, IDictionary<string, Bitmap> selected)
+    {
+        var usedOffsets = new HashSet<int>();
+        var recordsByOffset = records.ToDictionary(record => record.Offset, record => record);
+
+        foreach (var (key, spec) in HardMappedSprites)
+        {
+            if (selected.ContainsKey(key))
+            {
+                continue;
+            }
+
+            foreach (var offset in spec.Offsets)
+            {
+                if (!recordsByOffset.TryGetValue(offset, out var record))
+                {
+                    continue;
+                }
+
+                using var trimmed = TrimTransparent(record.Image);
+                if (trimmed.Width <= 1 || trimmed.Height <= 1)
+                {
+                    continue;
+                }
+
+                selected[key] = ScaleSpriteNearest(trimmed, spec.TargetWidth, spec.TargetHeight);
+                usedOffsets.Add(offset);
+                break;
+            }
+        }
+
+        return usedOffsets;
+    }
+
+    private static List<LegacySpriteMetric> BuildLegacySpriteMetrics(IReadOnlyList<LegacySpriteRecord> records)
+    {
+        var metrics = new List<LegacySpriteMetric>(records.Count);
+
+        foreach (var record in records)
+        {
+            var trimmed = TrimTransparent(record.Image);
+            if (trimmed.Width <= 1 || trimmed.Height <= 1)
+            {
+                trimmed.Dispose();
+                continue;
+            }
+
+            var opaquePixels = 0;
+            var symmetricMatches = 0;
+            var symmetryComparisons = 0;
+
+            for (var y = 0; y < trimmed.Height; y++)
+            {
+                for (var x = 0; x < trimmed.Width; x++)
+                {
+                    if (trimmed.GetPixel(x, y).A > 10)
+                    {
+                        opaquePixels++;
+                    }
+                }
+
+                for (var x = 0; x < trimmed.Width / 2; x++)
+                {
+                    var leftOpaque = trimmed.GetPixel(x, y).A > 10;
+                    var rightOpaque = trimmed.GetPixel(trimmed.Width - 1 - x, y).A > 10;
+                    if (leftOpaque == rightOpaque)
+                    {
+                        symmetricMatches++;
+                    }
+
+                    symmetryComparisons++;
+                }
+            }
+
+            var totalPixels = Math.Max(1, trimmed.Width * trimmed.Height);
+            var fillRatio = opaquePixels / (double)totalPixels;
+            var symmetry = symmetryComparisons == 0 ? 0d : symmetricMatches / (double)symmetryComparisons;
+
+            metrics.Add(new LegacySpriteMetric(
+                Offset: record.Offset,
+                Image: trimmed,
+                Width: trimmed.Width,
+                Height: trimmed.Height,
+                OpaquePixels: opaquePixels,
+                FillRatio: fillRatio,
+                VerticalSymmetry: symmetry));
+        }
+
+        return metrics;
+    }
+
+    private static List<LegacySpriteRecord> DecodeLegacySpriteRecords(byte[] blob)
+    {
+        var records = new List<LegacySpriteRecord>();
+        if (blob.Length < 64)
+        {
+            return records;
+        }
+
+        var palette = LoadLegacySpritePalette(blob);
+        for (var offset = 0; offset <= blob.Length - 16; offset += 4)
+        {
+            if (!TryUnpackLegacySprite(blob, offset, palette, out var record) || record is null)
+            {
+                continue;
+            }
+
+            if (records.Count > 0)
+            {
+                var previous = records[^1];
+                if (offset - previous.Offset < 8 && record.Header.SequenceEqual(previous.Header))
+                {
+                    record.Image.Dispose();
+                    continue;
+                }
+            }
+
+            records.Add(record);
+        }
+
+        return records;
+    }
+
+    private static Color[] LoadLegacySpritePalette(byte[] blob)
+    {
+        var palette = new List<Color> { Color.Transparent };
+        for (var i = 0; i + 1 < Math.Min(18, blob.Length); i += 2)
+        {
+            var word = (blob[i] << 8) | blob[i + 1];
+            var r = ((word >> 8) & 0x7) * 36;
+            var g = ((word >> 4) & 0x7) * 36;
+            var b = (word & 0x7) * 36;
+            palette.Add(Color.FromArgb(255, r, g, b));
+        }
+
+        while (palette.Count < 16)
+        {
+            var value = Math.Min(255, palette.Count * 18);
+            palette.Add(Color.FromArgb(255, value, value, value));
+        }
+
+        return [.. palette];
+    }
+
+    private static bool TryUnpackLegacySprite(byte[] blob, int offset, IReadOnlyList<Color> palette, out LegacySpriteRecord? record)
+    {
+        record = null;
+        if (offset + 16 > blob.Length)
+        {
+            return false;
+        }
+
+        var header = new ushort[8];
+        for (var i = 0; i < 8; i++)
+        {
+            header[i] = BitConverter.ToUInt16(blob, offset + (i * 2));
+            if (header[i] > 63)
+            {
+                return false;
+            }
+        }
+
+        if (!(header[0] <= header[2]
+              && header[1] <= header[3]
+              && header[4] <= header[6]
+              && header[5] <= header[7]))
+        {
+            return false;
+        }
+
+        var widthHint = header[6] + 1;
+        var height = header[7] + 1;
+        if (widthHint is < 1 or > 64 || height is < 1 or > 64)
+        {
+            return false;
+        }
+
+        var recordSize = 16 + (20 * height);
+        if (offset + recordSize > blob.Length)
+        {
+            return false;
+        }
+
+        var start = offset + 16;
+        var bitmap = new Bitmap(32, height, PixelFormat.Format32bppArgb);
+        var maskPopCount = 0;
+
+        for (var y = 0; y < height; y++)
+        {
+            var mask = ReadUInt32BigEndian(blob, start + (y * 4));
+            var p0 = ReadUInt32BigEndian(blob, start + (height * 4) + (y * 4));
+            var p1 = ReadUInt32BigEndian(blob, start + (height * 8) + (y * 4));
+            var p2 = ReadUInt32BigEndian(blob, start + (height * 12) + (y * 4));
+            var p3 = ReadUInt32BigEndian(blob, start + (height * 16) + (y * 4));
+
+            maskPopCount += CountBits(mask);
+
+            for (var x = 0; x < 32; x++)
+            {
+                var shift = 31 - x;
+                var visible = (mask >> shift) & 1;
+                if (visible == 0)
+                {
+                    continue;
+                }
+
+                var colorIndex =
+                    ((p0 >> shift) & 1)
+                    | (((p1 >> shift) & 1) << 1)
+                    | (((p2 >> shift) & 1) << 2)
+                    | (((p3 >> shift) & 1) << 3);
+
+                if (colorIndex == 0)
+                {
+                    colorIndex = 1;
+                }
+
+                bitmap.SetPixel(x, y, palette[(int)colorIndex]);
+            }
+        }
+
+        if (maskPopCount < 16 || maskPopCount > (32 * height) - 2)
+        {
+            bitmap.Dispose();
+            return false;
+        }
+
+        record = new LegacySpriteRecord(
+            Offset: offset,
+            Header: header,
+            WidthHint: widthHint,
+            Height: height,
+            MaskPopcount: maskPopCount,
+            Image: bitmap);
+        return true;
+    }
+
+    private static Bitmap TrimTransparent(Bitmap source)
+    {
+        var minX = source.Width;
+        var minY = source.Height;
+        var maxX = -1;
+        var maxY = -1;
+
+        for (var y = 0; y < source.Height; y++)
+        {
+            for (var x = 0; x < source.Width; x++)
+            {
+                if (source.GetPixel(x, y).A <= 10)
+                {
+                    continue;
+                }
+
+                minX = Math.Min(minX, x);
+                minY = Math.Min(minY, y);
+                maxX = Math.Max(maxX, x);
+                maxY = Math.Max(maxY, y);
+            }
+        }
+
+        if (maxX < minX || maxY < minY)
+        {
+            var transparent = new Bitmap(1, 1, PixelFormat.Format32bppArgb);
+            transparent.SetPixel(0, 0, Color.Transparent);
+            return transparent;
+        }
+
+        var rect = new Rectangle(minX, minY, (maxX - minX) + 1, (maxY - minY) + 1);
+        return source.Clone(rect, PixelFormat.Format32bppArgb);
+    }
+
+    private static Bitmap ScaleSpriteNearest(Bitmap source, int targetWidth, int targetHeight)
+    {
+        var result = new Bitmap(targetWidth, targetHeight, PixelFormat.Format32bppArgb);
+        using var g = Graphics.FromImage(result);
+        g.Clear(Color.Transparent);
+        g.InterpolationMode = InterpolationMode.NearestNeighbor;
+        g.PixelOffsetMode = PixelOffsetMode.Half;
+        g.CompositingQuality = CompositingQuality.HighSpeed;
+
+        var scale = Math.Min(targetWidth / (float)Math.Max(1, source.Width), targetHeight / (float)Math.Max(1, source.Height));
+        var drawWidth = Math.Max(1, (int)Math.Round(source.Width * scale));
+        var drawHeight = Math.Max(1, (int)Math.Round(source.Height * scale));
+        var drawX = (targetWidth - drawWidth) / 2;
+        var drawY = (targetHeight - drawHeight) / 2;
+        g.DrawImage(source, new Rectangle(drawX, drawY, drawWidth, drawHeight));
+        return result;
+    }
+
+    private static uint ReadUInt32BigEndian(byte[] data, int offset)
+    {
+        return ((uint)data[offset] << 24)
+               | ((uint)data[offset + 1] << 16)
+               | ((uint)data[offset + 2] << 8)
+               | data[offset + 3];
+    }
+
+    private static int CountBits(uint value)
+    {
+        var count = 0;
+        while (value != 0)
+        {
+            value &= value - 1;
+            count++;
+        }
+
+        return count;
     }
 
     private static Bitmap CreatePlayerSprite(TextureField field)

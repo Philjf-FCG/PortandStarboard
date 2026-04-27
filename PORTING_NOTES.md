@@ -50,6 +50,13 @@ All generated analysis artifacts are in `decompilation/`:
   - 8-word little-endian header per sprite record
   - 5 planar 32-bit row streams (mask + 4 color planes), big-endian bit order
   - record size: `16 + (height * 20)`
+- Runtime now uses decoded `SPRITES.VGA` records as primary fallbacks for core gameplay sprites (player/enemy/bullet/explosion) when no user override PNG is provided.
+  - This replaces the previous procedural placeholder shapes for those entities.
+- Runtime now prefers fixed S1 `SPRITES.VGA` offsets for deterministic core visuals:
+  - player: `0x07BC` (fallbacks `0x09FC`, `0x0C64`)
+  - enemy: `0x2C00` (fallbacks `0x2A04`, `0x3CE8`)
+  - bullet: `0x48EC` (fallbacks `0x48E4`, `0x48B4`, `0x20C8`)
+- Explosion currently stays procedural as a safety fallback until a reliable dedicated explosion record is pinned.
 - Unpacker tool: `tools/unpack_vga_sprites.py`
   - Example: `c:/DevProjects/Decompile/.venv/Scripts/python.exe tools/unpack_vga_sprites.py --root xenon2/Xenon2Me --out art_debug/unpacked`
   - Outputs contact sheets and per-sprite PNGs for `S1..S5/SPRITES.VGA`
