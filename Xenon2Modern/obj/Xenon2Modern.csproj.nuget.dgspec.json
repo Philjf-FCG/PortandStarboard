@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\DevProjects\\Decompile\\Xenon2Modern\\Xenon2Modern.csproj": {}
+    "c:\\DevProjects\\Decompile\\Xenon2Modern\\Xenon2Modern.csproj": {}
   },
   "projects": {
-    "C:\\DevProjects\\Decompile\\Xenon2Modern\\Xenon2Modern.csproj": {
+    "c:\\DevProjects\\Decompile\\Xenon2Modern\\Xenon2Modern.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\DevProjects\\Decompile\\Xenon2Modern\\Xenon2Modern.csproj",
+        "projectUniqueName": "c:\\DevProjects\\Decompile\\Xenon2Modern\\Xenon2Modern.csproj",
         "projectName": "Xenon2Modern",
-        "projectPath": "C:\\DevProjects\\Decompile\\Xenon2Modern\\Xenon2Modern.csproj",
+        "projectPath": "c:\\DevProjects\\Decompile\\Xenon2Modern\\Xenon2Modern.csproj",
         "packagesPath": "C:\\Users\\philj\\.nuget\\packages\\",
-        "outputPath": "C:\\DevProjects\\Decompile\\Xenon2Modern\\obj\\",
+        "outputPath": "c:\\DevProjects\\Decompile\\Xenon2Modern\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

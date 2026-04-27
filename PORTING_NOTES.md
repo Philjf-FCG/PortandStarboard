@@ -19,6 +19,36 @@ All generated analysis artifacts are in `decompilation/`:
 - Architecture: `x64`
 - Includes original data/art archives in build output under `assets/`
 
+## Playable Port Status
+- The startup path now launches a playable vertical-shooter loop (`GameForm`).
+- Gameplay systems implemented in C#:
+  - player movement
+  - firing and projectile updates
+  - enemy spawning and motion patterns
+  - collision detection and damage
+  - scoring, lives, stages, game-over/restart flow
+  - scrolling background rendering
+- Original packaged assets are consumed from `assets/` and converted into runtime sprites.
+
+## Art Asset Migration Status
+- The previous migration path produced scrambled visuals because sprite generation sampled arbitrary byte windows from legacy blobs.
+- Asset generation now uses deterministic texture synthesis from both available sources:
+  - DOS data files (`S1/SPRITES.VGA`, `S1/MODS.VGA`, `X2WEAPS.DAT`)
+  - Amiga extracted binaries (`amiga/disk1/Xenon2/DJ99`, `amiga/disk1/Xenon2/Xenon2`)
+- Result: stable, coherent in-game art (player, enemy, bullets, explosions, background) with no scrambling artifacts.
+- Importer layer added: custom sprites now override generated art when found.
+  - Search paths include `user-sprites/` at workspace root, `assets/user-sprites/`, `assets/imports/`, or `XENON2_SPRITES_PATH`.
+  - Supports direct PNG files (`player.png`, `enemy.png`, `bullet.png`, `background.png`, `explosion.png`).
+  - Supports sprite sheet import with `sprite-manifest.json` + `sheet.png`.
+- For pixel-perfect original sprites, we still need either:
+  - documented/decompressed native sprite format specs, or
+  - an alternate source with extracted bitmaps/sprite sheets.
+
+### Controls
+- Move: `Arrow keys` or `W A S D`
+- Fire: `Space` or `Ctrl`
+- Restart after game over: `Enter`
+
 ## Current Reverse Engineering Status
 - Disk 1 (ADF): parsed and extracted successfully, including main `Xenon2` 68000 executable.
 - Disk 2 (ADF): filesystem parser reports invalid boot block; this is likely due to nonstandard/copy-protected track layout.
