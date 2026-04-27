@@ -4,7 +4,20 @@ namespace Xenon2Modern;
 
 public sealed class GameAssets : IDisposable
 {
-    public sealed record StageBackgroundMap(int Width, int Height, IReadOnlyList<ushort> Cells);
+    public sealed record StageBackgroundMap(int Width, int Height, IReadOnlyList<ushort> Cells, string Decoder);
+
+    private enum MapCommandOp
+    {
+        LiteralBytes,
+        RepeatByte,
+        LiteralWords,
+        RepeatWord,
+        RepeatPreviousByte,
+        ZeroWords,
+        Nop,
+    }
+
+    private sealed record MapDecodeCandidate(string Name, byte[] Data, int TrailingBytes);
 
     private sealed class TextureField
     {
@@ -185,6 +198,9 @@ public sealed class GameAssets : IDisposable
     private static IReadOnlyDictionary<int, StageBackgroundMap> LoadStageBackgroundMaps(LegacyAssetCatalog catalog)
     {
         var result = new Dictionary<int, StageBackgroundMap>();
+        const int mapWidth = 13;
+        const int targetRows = 288;
+        const int targetCells = mapWidth * targetRows;
 
         for (var stage = 1; stage <= 5; stage++)
         {
@@ -194,14 +210,10 @@ public sealed class GameAssets : IDisposable
                 continue;
             }
 
-            var entries = DecodeStageMapEntries(mapBlob);
+            var modsBlob = TryGetBytes(catalog, $"S{stage}/MODS.VGA");
+            var tileCount = EstimateStageTileCount(modsBlob);
+            var entries = DecodeStageMapEntries(mapBlob, tileCount, mapWidth, targetCells, out var decoderName);
             if (entries.Count == 0)
-            {
-                continue;
-            }
-
-            var mapWidth = InferMapWidth(entries.Count);
-            if (mapWidth <= 0)
             {
                 continue;
             }
@@ -214,50 +226,118 @@ public sealed class GameAssets : IDisposable
                 cells[i] = entries[i];
             }
 
-            result[stage] = new StageBackgroundMap(mapWidth, mapHeight, cells);
+            result[stage] = new StageBackgroundMap(mapWidth, mapHeight, cells, decoderName);
         }
 
         return result;
     }
 
-    private static int InferMapWidth(int entryCount)
+    private static int EstimateStageTileCount(byte[]? modsBlob)
     {
-        if (entryCount <= 0)
+        if (modsBlob is null || modsBlob.Length < 128)
         {
-            return 0;
+            return 512;
         }
 
-        var candidates = new[] { 20, 22, 24, 26, 28, 30, 32, 34, 36, 40 };
-        var bestWidth = 24;
-        var bestScore = int.MaxValue;
+        var start = DetectModsStart(modsBlob);
+        var payload = Math.Max(0, modsBlob.Length - start);
+        var tileCount = payload / 128;
+        return Math.Max(1, tileCount);
+    }
 
-        foreach (var width in candidates)
+    private static List<ushort> DecodeStageMapEntries(byte[] mapBlob, int tileCount, int mapWidth, int targetCells, out string decoderName)
+    {
+        var targetRows = Math.Max(1, targetCells / Math.Max(1, mapWidth));
+        var candidates = new List<MapDecodeCandidate>
         {
-            var remainder = entryCount % width;
-            var closenessBias = Math.Abs(width - 24);
-            var score = (remainder * 10) + closenessBias;
-            if (score < bestScore)
+            new("raw", mapBlob, 0),
+        };
+
+        if (TryDecodeByteRun1(mapBlob, out var decoded, out var consumed) &&
+            decoded.Length >= mapBlob.Length / 2)
+        {
+            var trailing = Math.Max(0, mapBlob.Length - consumed);
+            candidates.Add(new("byterun1", decoded, trailing));
+
+            if (decoded.Length >= targetCells)
             {
-                bestScore = score;
-                bestWidth = width;
+                candidates.Add(new("amiga13x288-byterun-byte-row", ConvertByteMapToEntryPairs(decoded, mapWidth, targetRows, columnMajor: false), trailing));
+                candidates.Add(new("amiga13x288-byterun-byte-col", ConvertByteMapToEntryPairs(decoded, mapWidth, targetRows, columnMajor: true), trailing));
             }
         }
 
-        return bestWidth;
-    }
-
-    private static List<ushort> DecodeStageMapEntries(byte[] mapBlob)
-    {
-        var data = mapBlob;
-        if (TryDecodeByteRun1(mapBlob, out var decoded, out var consumed) &&
-            consumed >= mapBlob.Length - 16 &&
-            decoded.Length >= mapBlob.Length)
+        if (mapBlob.Length >= targetCells)
         {
-            data = decoded;
+            candidates.Add(new("amiga13x288-raw-byte-row", ConvertByteMapToEntryPairs(mapBlob, mapWidth, targetRows, columnMajor: false), 0));
+            candidates.Add(new("amiga13x288-raw-byte-col", ConvertByteMapToEntryPairs(mapBlob, mapWidth, targetRows, columnMajor: true), 0));
         }
 
-        var entries = new List<ushort>(data.Length / 2);
-        for (var i = 0; i + 1 < data.Length; i += 2)
+        var commandDecoders = new (string Name, MapCommandOp[] Table, bool PlusOne)[]
+        {
+            ("cmd-nop-zerow-repb-litw", [MapCommandOp.Nop, MapCommandOp.ZeroWords, MapCommandOp.RepeatByte, MapCommandOp.LiteralWords], true),
+            ("cmd-nop-zerow-repb-repb", [MapCommandOp.Nop, MapCommandOp.ZeroWords, MapCommandOp.RepeatByte, MapCommandOp.RepeatByte], true),
+            ("cmd-nop-zerow-repb-repw", [MapCommandOp.Nop, MapCommandOp.ZeroWords, MapCommandOp.RepeatByte, MapCommandOp.RepeatWord], true),
+            ("cmd-nop-zerow-repw-litw", [MapCommandOp.Nop, MapCommandOp.ZeroWords, MapCommandOp.RepeatWord, MapCommandOp.LiteralWords], true),
+        };
+
+        foreach (var heuristic in commandDecoders)
+        {
+            var commandDecoded = DecodeMapByCommands(mapBlob, heuristic.Table, heuristic.PlusOne, out var commandConsumed);
+            if (commandDecoded.Length < mapWidth * 2 * 24)
+            {
+                continue;
+            }
+
+            var trailing = Math.Max(0, mapBlob.Length - commandConsumed);
+            candidates.Add(new(heuristic.Name, commandDecoded, trailing));
+        }
+
+        var scoredCandidates = candidates
+            .Select(candidate =>
+            {
+                var score = ScoreDecodedMap(candidate.Data, candidate.TrailingBytes, tileCount, mapWidth);
+
+                // Prefer decoded stream over raw bytes when quality is similar.
+                if (string.Equals(candidate.Name, "raw", StringComparison.OrdinalIgnoreCase))
+                {
+                    score += 0.22d;
+                }
+                else if (string.Equals(candidate.Name, "byterun1", StringComparison.OrdinalIgnoreCase))
+                {
+                    score -= 0.15d;
+                }
+
+                if (candidate.Name.StartsWith("amiga13x288", StringComparison.OrdinalIgnoreCase))
+                {
+                    score -= 0.35d;
+                }
+
+                if (candidate.Name.EndsWith("-col", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Source notes indicate vertical storage layout; favor this interpretation.
+                    score -= 0.18d;
+                }
+
+                // Guardrail: command-table decoders are currently experimental.
+                // They must be significantly better before we allow them to win selection.
+                if (candidate.Name.StartsWith("cmd-", StringComparison.OrdinalIgnoreCase))
+                {
+                    score += 0.85d;
+                }
+
+                return (Candidate: candidate, Score: score);
+            })
+            .OrderBy(result => result.Score)
+            .ToArray();
+
+        var bestCandidate = scoredCandidates[0];
+
+        decoderName = bestCandidate.Candidate.Name;
+        var data = bestCandidate.Candidate.Data;
+        var evenLength = data.Length & ~1;
+
+        var entries = new List<ushort>(evenLength / 2);
+        for (var i = 0; i + 1 < evenLength; i += 2)
         {
             var attributes = data[i];
             var tileIndex = data[i + 1];
@@ -265,6 +345,256 @@ public sealed class GameAssets : IDisposable
         }
 
         return entries;
+    }
+
+    private static byte[] ConvertByteMapToEntryPairs(byte[] source, int width, int height, bool columnMajor)
+    {
+        var targetCells = width * height;
+        var cells = Math.Min(targetCells, source.Length);
+        var output = new byte[cells * 2];
+
+        for (var i = 0; i < cells; i++)
+        {
+            var sourceIndex = i;
+            if (columnMajor)
+            {
+                var row = i / width;
+                var col = i % width;
+                sourceIndex = (col * height) + row;
+                if (sourceIndex >= source.Length)
+                {
+                    break;
+                }
+            }
+
+            var value = source[sourceIndex];
+            output[i * 2] = (byte)(value & 0xC0);
+            output[i * 2 + 1] = (byte)(value & 0x3F);
+        }
+
+        return output;
+    }
+
+    private static byte[] DecodeMapByCommands(byte[] input, IReadOnlyList<MapCommandOp> table, bool plusOne, out int consumed)
+    {
+        var output = new List<byte>(input.Length * 4);
+        var i = 0;
+        byte previousByte = 0;
+
+        while (i < input.Length)
+        {
+            var command = input[i++];
+            var opIndex = command >> 6;
+            if (opIndex < 0 || opIndex >= table.Count)
+            {
+                break;
+            }
+
+            var count = (command & 0x3F) + (plusOne ? 1 : 0);
+            if (count < 0)
+            {
+                break;
+            }
+
+            switch (table[opIndex])
+            {
+                case MapCommandOp.LiteralBytes:
+                {
+                    if (i + count > input.Length)
+                    {
+                        i = input.Length;
+                        break;
+                    }
+
+                    for (var n = 0; n < count; n++)
+                    {
+                        var value = input[i + n];
+                        output.Add(value);
+                        previousByte = value;
+                    }
+
+                    i += count;
+                    break;
+                }
+
+                case MapCommandOp.RepeatByte:
+                {
+                    if (i >= input.Length)
+                    {
+                        i = input.Length;
+                        break;
+                    }
+
+                    var value = input[i++];
+                    for (var n = 0; n < count; n++)
+                    {
+                        output.Add(value);
+                    }
+
+                    previousByte = value;
+                    break;
+                }
+
+                case MapCommandOp.LiteralWords:
+                {
+                    var needed = count * 2;
+                    if (i + needed > input.Length)
+                    {
+                        i = input.Length;
+                        break;
+                    }
+
+                    for (var n = 0; n < needed; n++)
+                    {
+                        var value = input[i + n];
+                        output.Add(value);
+                        previousByte = value;
+                    }
+
+                    i += needed;
+                    break;
+                }
+
+                case MapCommandOp.RepeatWord:
+                {
+                    if (i + 1 >= input.Length)
+                    {
+                        i = input.Length;
+                        break;
+                    }
+
+                    var high = input[i++];
+                    var low = input[i++];
+                    for (var n = 0; n < count; n++)
+                    {
+                        output.Add(high);
+                        output.Add(low);
+                    }
+
+                    previousByte = low;
+                    break;
+                }
+
+                case MapCommandOp.RepeatPreviousByte:
+                {
+                    for (var n = 0; n < count; n++)
+                    {
+                        output.Add(previousByte);
+                    }
+
+                    break;
+                }
+
+                case MapCommandOp.ZeroWords:
+                {
+                    for (var n = 0; n < count; n++)
+                    {
+                        output.Add(0);
+                        output.Add(0);
+                    }
+
+                    previousByte = 0;
+                    break;
+                }
+
+                case MapCommandOp.Nop:
+                    break;
+            }
+        }
+
+        consumed = i;
+        return output.ToArray();
+    }
+
+    private static double ScoreDecodedMap(byte[] decoded, int trailingBytes, int tileCount, int mapWidth)
+    {
+        if (decoded.Length < mapWidth * 2 * 24)
+        {
+            return 1_000_000d;
+        }
+
+        var evenLength = decoded.Length & ~1;
+        var cellCount = evenLength / 2;
+        var rows = cellCount / mapWidth;
+        if (rows < 24)
+        {
+            return 1_000_000d;
+        }
+
+        var usableCells = rows * mapWidth;
+        var remainderCells = cellCount - usableCells;
+
+        var inRange = 0;
+        var sameHorizontal = 0;
+        var sameVertical = 0;
+        var zeroTiles = 0;
+        var uniqueTiles = new HashSet<byte>();
+        var totalHorizontal = rows * (mapWidth - 1);
+        var totalVertical = (rows - 1) * mapWidth;
+
+        for (var row = 0; row < rows; row++)
+        {
+            var rowOffset = row * mapWidth * 2;
+            for (var col = 0; col < mapWidth; col++)
+            {
+                var tile = decoded[rowOffset + (col * 2) + 1];
+                uniqueTiles.Add(tile);
+                if (tile == 0)
+                {
+                    zeroTiles++;
+                }
+
+                if (tile < tileCount)
+                {
+                    inRange++;
+                }
+
+                if (col + 1 < mapWidth)
+                {
+                    var nextTile = decoded[rowOffset + ((col + 1) * 2) + 1];
+                    if (tile == nextTile)
+                    {
+                        sameHorizontal++;
+                    }
+                }
+
+                if (row + 1 < rows)
+                {
+                    var nextRowOffset = rowOffset + (mapWidth * 2);
+                    var downTile = decoded[nextRowOffset + (col * 2) + 1];
+                    if (tile == downTile)
+                    {
+                        sameVertical++;
+                    }
+                }
+            }
+        }
+
+        var inRangeRatio = inRange / (double)Math.Max(1, usableCells);
+        var zeroRatio = zeroTiles / (double)Math.Max(1, usableCells);
+        var repetitionRatio = 0.5d *
+            (sameHorizontal / (double)Math.Max(1, totalHorizontal) +
+             sameVertical / (double)Math.Max(1, totalVertical));
+
+        var trailingPenalty = trailingBytes / 28d;
+        var repetitionPenalty = Math.Abs(repetitionRatio - 0.32d) * 0.9d;
+        var rangePenalty = (1d - inRangeRatio) * 1.8d;
+        var remainderPenalty = remainderCells / (double)Math.Max(1, mapWidth);
+
+        // Reject decodes that collapse into a mostly-zero tile field.
+        var zeroPenalty = Math.Max(0d, zeroRatio - 0.35d) * 5d + Math.Abs(zeroRatio - 0.20d) * 1.2d;
+        var lowRowPenalty = rows < 70 ? (70 - rows) * 0.045d : 0d;
+        var uniqueTilePenalty = uniqueTiles.Count < 24 ? (24 - uniqueTiles.Count) * 0.07d : 0d;
+        var highRowPenalty = rows > 420 ? (rows - 420) * 0.02d : 0d;
+
+        return trailingPenalty
+               + repetitionPenalty
+               + rangePenalty
+               + remainderPenalty
+               + zeroPenalty
+               + lowRowPenalty
+               + uniqueTilePenalty
+               + highRowPenalty;
     }
 
     private static bool TryDecodeByteRun1(byte[] input, out byte[] output, out int consumed)

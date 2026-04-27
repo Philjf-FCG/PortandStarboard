@@ -1,0 +1,289 @@
+{
+  "input_exe": "C:\\DevProjects\\Decompile\\xenon2\\Xenon2Me\\XENON2.EXE",
+  "module_size": 117016,
+  "anchor_offset": 112040,
+  "words_before_anchor": [
+    {
+      "module_offset": 111944,
+      "hex": "0x0130",
+      "value": 304
+    },
+    {
+      "module_offset": 111946,
+      "hex": "0x0020",
+      "value": 32
+    },
+    {
+      "module_offset": 111948,
+      "hex": "0x0130",
+      "value": 304
+    },
+    {
+      "module_offset": 111950,
+      "hex": "0x0010",
+      "value": 16
+    },
+    {
+      "module_offset": 111952,
+      "hex": "0x0040",
+      "value": 64
+    },
+    {
+      "module_offset": 111954,
+      "hex": "0x0120",
+      "value": 288
+    },
+    {
+      "module_offset": 111956,
+      "hex": "0x0120",
+      "value": 288
+    },
+    {
+      "module_offset": 111958,
+      "hex": "0x0130",
+      "value": 304
+    },
+    {
+      "module_offset": 111960,
+      "hex": "0x0020",
+      "value": 32
+    },
+    {
+      "module_offset": 111962,
+      "hex": "0x0010",
+      "value": 16
+    },
+    {
+      "module_offset": 111964,
+      "hex": "0x0130",
+      "value": 304
+    },
+    {
+      "module_offset": 111966,
+      "hex": "0x0001",
+      "value": 1
+    },
+    {
+      "module_offset": 111968,
+      "hex": "0x0000",
+      "value": 0
+    },
+    {
+      "module_offset": 111970,
+      "hex": "0x0003",
+      "value": 3
+    },
+    {
+      "module_offset": 111972,
+      "hex": "0x0002",
+      "value": 2
+    },
+    {
+      "module_offset": 111974,
+      "hex": "0x0006",
+      "value": 6
+    },
+    {
+      "module_offset": 111976,
+      "hex": "0x0004",
+      "value": 4
+    },
+    {
+      "module_offset": 111978,
+      "hex": "0x0004",
+      "value": 4
+    },
+    {
+      "module_offset": 111980,
+      "hex": "0x0008",
+      "value": 8
+    },
+    {
+      "module_offset": 111982,
+      "hex": "0x0007",
+      "value": 7
+    },
+    {
+      "module_offset": 111984,
+      "hex": "0x000A",
+      "value": 10
+    },
+    {
+      "module_offset": 111986,
+      "hex": "0x0009",
+      "value": 9
+    },
+    {
+      "module_offset": 111988,
+      "hex": "0x0010",
+      "value": 16
+    },
+    {
+      "module_offset": 111990,
+      "hex": "0x0090",
+      "value": 144
+    },
+    {
+      "module_offset": 111992,
+      "hex": "0x0008",
+      "value": 8
+    },
+    {
+      "module_offset": 111994,
+      "hex": "0x0090",
+      "value": 144
+    },
+    {
+      "module_offset": 111996,
+      "hex": "0x0088",
+      "value": 136
+    },
+    {
+      "module_offset": 111998,
+      "hex": "0x0018",
+      "value": 24
+    },
+    {
+      "module_offset": 112000,
+      "hex": "0x0020",
+      "value": 32
+    },
+    {
+      "module_offset": 112002,
+      "hex": "0x0010",
+      "value": 16
+    },
+    {
+      "module_offset": 112004,
+      "hex": "0x0090",
+      "value": 144
+    },
+    {
+      "module_offset": 112006,
+      "hex": "0x0090",
+      "value": 144
+    },
+    {
+      "module_offset": 112008,
+      "hex": "0x0008",
+      "value": 8
+    },
+    {
+      "module_offset": 112010,
+      "hex": "0x03F0",
+      "value": 1008
+    },
+    {
+      "module_offset": 112012,
+      "hex": "0x03D0",
+      "value": 976
+    },
+    {
+      "module_offset": 112014,
+      "hex": "0x0360",
+      "value": 864
+    },
+    {
+      "module_offset": 112016,
+      "hex": "0x0360",
+      "value": 864
+    },
+    {
+      "module_offset": 112018,
+      "hex": "0x02F0",
+      "value": 752
+    },
+    {
+      "module_offset": 112020,
+      "hex": "0x02E0",
+      "value": 736
+    },
+    {
+      "module_offset": 112022,
+      "hex": "0x0290",
+      "value": 656
+    },
+    {
+      "module_offset": 112024,
+      "hex": "0x0210",
+      "value": 528
+    },
+    {
+      "module_offset": 112026,
+      "hex": "0x01F0",
+      "value": 496
+    },
+    {
+      "module_offset": 112028,
+      "hex": "0x0180",
+      "value": 384
+    },
+    {
+      "module_offset": 112030,
+      "hex": "0x0170",
+      "value": 368
+    },
+    {
+      "module_offset": 112032,
+      "hex": "0x0000",
+      "value": 0
+    },
+    {
+      "module_offset": 112034,
+      "hex": "0x0002",
+      "value": 2
+    },
+    {
+      "module_offset": 112036,
+      "hex": "0x0001",
+      "value": 1
+    },
+    {
+      "module_offset": 112038,
+      "hex": "0x0003",
+      "value": 3
+    }
+  ],
+  "strings_after_anchor": [
+    {
+      "module_offset": 112040,
+      "text": "x2spr.dat"
+    },
+    {
+      "module_offset": 112050,
+      "text": "x2weaps.dat"
+    },
+    {
+      "module_offset": 112062,
+      "text": "shop.dat"
+    },
+    {
+      "module_offset": 112071,
+      "text": "gr.dat"
+    },
+    {
+      "module_offset": 112078,
+      "text": "s1\\map.cmp"
+    },
+    {
+      "module_offset": 112089,
+      "text": "s1\\mods.vga"
+    },
+    {
+      "module_offset": 112101,
+      "text": "s1\\sprites.vga"
+    },
+    {
+      "module_offset": 112116,
+      "text": "s1\\events.pc"
+    },
+    {
+      "module_offset": 112129,
+      "text": "s1\\eventsbg.pc"
+    },
+    {
+      "module_offset": 112144,
+      "text": "s1\\paths.bin"
+    }
+  ]
+}

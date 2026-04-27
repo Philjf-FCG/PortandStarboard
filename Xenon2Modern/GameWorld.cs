@@ -408,8 +408,8 @@ public sealed class GameWorld
         g.FillRectangle(bgBrush, clientRect);
 
         var stage = ((Math.Max(1, Stage) - 1) % 5) + 1;
-        var tiles = GetRenderableBackgroundTiles(stage);
-        if (tiles.Count == 0)
+        var proceduralTiles = GetRenderableBackgroundTiles(stage);
+        if (proceduralTiles.Count == 0)
         {
             var tile = _assets.BackgroundTile;
             var tileW = Math.Max(32, tile.Width);
@@ -433,25 +433,44 @@ public sealed class GameWorld
         g.InterpolationMode = InterpolationMode.NearestNeighbor;
         g.PixelOffsetMode = PixelOffsetMode.Half;
         _assets.StageBackgroundMaps.TryGetValue(stage, out var stageMap);
+        var mapTiles = GetStageBackgroundTiles(stage);
 
-        var yStart = -(_backgroundOffset % drawSize) - drawSize;
-        for (var y = yStart; y < clientRect.Height + drawSize; y += drawSize)
+        if (stageMap is not null && mapTiles.Count > 0)
         {
-            var row = (int)MathF.Floor((_backgroundOffset + y) / drawSize);
-            for (var x = -drawSize; x < clientRect.Width + drawSize; x += drawSize)
-            {
-                var col = (int)MathF.Floor((float)x / drawSize);
-                if (stageMap is null)
-                {
-                    var tileIndex = SelectBackgroundTileIndex(col, row, stage, tiles.Count);
-                    var tile = tiles[tileIndex];
-                    g.DrawImage(tile, x, y, drawSize, drawSize);
-                    continue;
-                }
+            var laneWidthPx = stageMap.Width * drawSize;
+            var laneLeft = (clientRect.Width - laneWidthPx) / 2;
+            var yStart = -(_backgroundOffset % drawSize) - drawSize;
 
-                var mapSelection = SelectMapTile(stageMap, col, row, tiles.Count);
-                var mapTile = tiles[mapSelection.TileIndex];
-                DrawBackgroundTile(g, mapTile, x, y, drawSize, mapSelection.FlipX, mapSelection.FlipY);
+            for (var y = yStart; y < clientRect.Height + drawSize; y += drawSize)
+            {
+                var row = (int)MathF.Floor((_backgroundOffset + y) / drawSize);
+                for (var col = 0; col < stageMap.Width; col++)
+                {
+                    var x = laneLeft + (col * drawSize);
+                    if (x + drawSize <= 0 || x >= clientRect.Width)
+                    {
+                        continue;
+                    }
+
+                    var mapSelection = SelectMapTile(stageMap, col, row, mapTiles.Count);
+                    var mapTile = mapTiles[mapSelection.TileIndex];
+                    DrawBackgroundTile(g, mapTile, x, y, drawSize, mapSelection.FlipX, mapSelection.FlipY);
+                }
+            }
+        }
+        else
+        {
+            var yStart = -(_backgroundOffset % drawSize) - drawSize;
+            for (var y = yStart; y < clientRect.Height + drawSize; y += drawSize)
+            {
+                var row = (int)MathF.Floor((_backgroundOffset + y) / drawSize);
+                for (var x = -drawSize; x < clientRect.Width + drawSize; x += drawSize)
+                {
+                    var col = (int)MathF.Floor((float)x / drawSize);
+                    var tileIndex = SelectBackgroundTileIndex(col, row, stage, proceduralTiles.Count);
+                    var tile = proceduralTiles[tileIndex];
+                    g.DrawImage(tile, x, y, drawSize, drawSize);
+                }
             }
         }
 
@@ -478,6 +497,16 @@ public sealed class GameWorld
 
         _renderableBackgroundTilesByStage[stage] = filtered;
         return filtered;
+    }
+
+    private IReadOnlyList<Bitmap> GetStageBackgroundTiles(int stage)
+    {
+        if (!_assets.StageBackgroundTiles.TryGetValue(stage, out var stageTiles) || stageTiles.Count == 0)
+        {
+            return [];
+        }
+
+        return stageTiles;
     }
 
     private static int CountOpaquePixels(Bitmap bitmap)
@@ -543,12 +572,10 @@ public sealed class GameWorld
         var attr = (entry >> 8) & 0xFF;
         var tileId = entry & 0xFF;
 
-        var variant = attr & 0x3F;
-        var tileIndex = (tileId + variant) % tileCount;
-        var flipX = (attr & 0x40) != 0;
-        var flipY = (attr & 0x80) != 0;
-
-        return (tileIndex, flipX, flipY);
+        // Attribute high bits appear to select tile bank pages in legacy map entries.
+        var bankOffset = attr & 0xC0;
+        var tileIndex = (tileId + bankOffset) % tileCount;
+        return (tileIndex, false, false);
     }
 
     private static void DrawBackgroundTile(Graphics g, Bitmap tile, float x, float y, int size, bool flipX, bool flipY)
@@ -626,11 +653,12 @@ public sealed class GameWorld
 
         var stage = ((Math.Max(1, Stage) - 1) % 5) + 1;
         _assets.StageBackgroundMaps.TryGetValue(stage, out var stageMap);
-        var tiles = GetRenderableBackgroundTiles(stage);
+        var tiles = GetStageBackgroundTiles(stage);
+        var proceduralTiles = GetRenderableBackgroundTiles(stage);
 
         const int drawSize = 24;
         var viewportRow = (int)MathF.Floor((_backgroundOffset + (clientRect.Height * 0.5f)) / drawSize);
-        var viewportCol = Math.Max(0, clientRect.Width / (2 * drawSize));
+        var viewportCol = stageMap is null ? Math.Max(0, clientRect.Width / (2 * drawSize)) : stageMap.Width / 2;
         var fps = _lastDeltaSeconds > 0f ? 1f / _lastDeltaSeconds : 0f;
 
         var lines = new List<string>
@@ -640,7 +668,7 @@ public sealed class GameWorld
             $"player x{_playerBounds.X,6:0.0} y{_playerBounds.Y,6:0.0}",
             $"bullets {_bullets.Count,3}  enemies {_enemies.Count,3}  explosions {_explosions.Count,3}",
             $"stage {stage}  bgOffset {_backgroundOffset,8:0.0}  stageTimer {_stageTimer,6:0.00}",
-            $"bgTiles {tiles.Count,4}  map {(stageMap is null ? "missing" : $"{stageMap.Width}x{stageMap.Height} ({stageMap.Cells.Count})")}",
+            $"bgTiles map:{tiles.Count,4} proc:{proceduralTiles.Count,4}  map {(stageMap is null ? "missing" : $"{stageMap.Width}x{stageMap.Height} ({stageMap.Cells.Count}) [{stageMap.Decoder}]")}",
         };
 
         if (stageMap is not null && stageMap.Width > 0 && stageMap.Height > 0 && stageMap.Cells.Count > 0)
@@ -653,13 +681,11 @@ public sealed class GameWorld
                 var entry = stageMap.Cells[mapIndex];
                 var attr = (entry >> 8) & 0xFF;
                 var rawTile = entry & 0xFF;
-                var variant = attr & 0x3F;
-                var flipX = (attr & 0x40) != 0;
-                var flipY = (attr & 0x80) != 0;
-                var tileIndex = tiles.Count > 0 ? (rawTile + variant) % tiles.Count : 0;
+                var bankOffset = attr & 0xC0;
+                var tileIndex = tiles.Count > 0 ? (rawTile + bankOffset) % tiles.Count : 0;
 
                 lines.Add($"sample rc {mapRow,4},{mapCol,4} idx {mapIndex,5}");
-                lines.Add($"entry 0x{entry:X4} attr 0x{attr:X2} tile {rawTile,3} var {variant,2} fx {(flipX ? 1 : 0)} fy {(flipY ? 1 : 0)} -> {tileIndex,3}");
+                lines.Add($"entry 0x{entry:X4} attr 0x{attr:X2} tile {rawTile,3} bank {bankOffset,3} -> {tileIndex,3}");
             }
         }
 

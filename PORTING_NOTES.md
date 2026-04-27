@@ -77,3 +77,29 @@ From workspace root:
 ```powershell
 .\rebuild_xenon2.ps1
 ```
+
+## WinUAE Direct Run
+- Added a repeatable WinUAE launcher script at `run_xenon2_winuae.ps1`.
+- Added profile `winuae-xenon2.uae`.
+- Launch command now works from project root and loads:
+  - profile with `-f winuae-xenon2.uae`
+  - built-in replacement ROM via `-s kickstart_rom_file=:AROS`
+  - `disk1.adf` / `disk2.adf` via `-s floppy0=...` and `-s floppy1=...`
+- WinUAE boot log location used for validation:
+  - `C:\Users\Public\Documents\Amiga Files\WinUAE\winuaebootlog.txt`
+
+Run:
+
+```powershell
+.\run_xenon2_winuae.ps1
+```
+
+## Sprite/Map Pipeline Evidence From Original EXE
+- Added deterministic extractor `tools/analyze_xenon2_asset_table.py`.
+- Generated artifact: `decompilation/xenon2_asset_table.json`.
+- Confirmed contiguous asset-name table in the DOS module:
+  - `x2spr.dat`, `x2weaps.dat`, `shop.dat`, `gr.dat`
+  - `s1\map.cmp`, `s1\mods.vga`, `s1\sprites.vga`, `s1\events.pc`, `s1\eventsbg.pc`, `s1\paths.bin`
+- Nearby 16-bit constants include repeated geometry-like values:
+  - `0x0130` (304), `0x0120` (288), `0x0090` (144), `0x0088` (136), `0x0020` (32), `0x0010` (16)
+- This supports current assumptions that stage background data is lane-constrained and map-height oriented (not full-screen tiled across width).

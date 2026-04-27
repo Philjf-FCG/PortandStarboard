@@ -1,0 +1,14 @@
+config_description=Xenon II automated launch profile
+use_gui=no
+kickstart_rom_file=:AROS
+floppy0=disk1.adf
+floppy1=disk2.adf
+floppy0wp=true
+floppy1wp=true
+chipmem_size=4
+bogomem_size=0
+fastmem_size=0
+cpu_type=68000
+cpu_speed=max
+gfx_framerate=1
+sound_output=none
