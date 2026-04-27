@@ -1,0 +1,26 @@
+{
+  "input_file": "C:\\DevProjects\\Decompile\\xenon2\\Xenon2Me\\XENON2.EXE",
+  "file_size_bytes": 123496,
+  "mz_header": {
+    "e_cblp": 104,
+    "e_cp": 242,
+    "e_crlc": 405,
+    "e_cparhdr": 128,
+    "e_minalloc": 17522,
+    "e_maxalloc": 65535,
+    "e_ss": 13435,
+    "e_sp": 512,
+    "e_csum": 0,
+    "e_ip": 1266,
+    "e_cs": 0,
+    "e_lfarlc": 34,
+    "e_ovno": 0
+  },
+  "computed": {
+    "header_size_bytes": 2048,
+    "executable_size_bytes": 123496,
+    "load_module_size_bytes": 121448,
+    "entry_offset_in_module": 1266,
+    "stack_offset_in_module": 215472
+  }
+}

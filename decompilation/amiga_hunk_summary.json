@@ -1,0 +1,24 @@
+{
+  "input_file": "C:\\DevProjects\\Decompile\\amiga_extracted\\disk1\\Xenon2\\Xenon2",
+  "file_size_bytes": 205784,
+  "resident_libraries": [],
+  "segment_count": 2,
+  "segments": [
+    {
+      "index": 0,
+      "type": "CODE",
+      "declared_size_bytes": 205724,
+      "actual_data_bytes": 205724,
+      "load_address": 0,
+      "relocation_entries": 0
+    },
+    {
+      "index": 1,
+      "type": "BSS",
+      "declared_size_bytes": 4,
+      "actual_data_bytes": 0,
+      "load_address": 205724,
+      "relocation_entries": 0
+    }
+  ]
+}
