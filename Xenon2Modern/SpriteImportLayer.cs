@@ -5,13 +5,19 @@ namespace Xenon2Modern;
 
 public static class SpriteImportLayer
 {
-    private static readonly (string Key, string[] RegionAliases, string[] FileNames)[] AssetSpecs =
+    private static readonly (string Key, string[] RegionAliases, string[] FileNames)[] CoreAssetSpecs =
     [
         ("player", ["player", "ship"], ["player.png", "ship.png"]),
         ("enemy", ["enemy", "foe"], ["enemy.png", "foe.png"]),
         ("bullet", ["bullet", "projectile"], ["bullet.png", "projectile.png"]),
         ("background", ["background", "backgroundTile", "tile"], ["background.png", "background_tile.png", "tile.png"]),
         ("explosion", ["explosion", "blast"], ["explosion.png", "blast.png"]),
+    ];
+
+    private static readonly (string Key, string[] FileNames)[] SupplementalFileSpecs =
+    [
+        ("font-sheet", ["font.png", "hud_font.png", "Master System - Xenon 2_ Megablast (PAL) - Miscellaneous - Font.png"]),
+        ("items-sheet", ["items.png", "item_sprites.png", "Master System - Xenon 2_ Megablast (PAL) - Miscellaneous - Items.png"]),
     ];
 
     public static Dictionary<string, Bitmap> LoadOverrides(string assetRoot)
@@ -22,11 +28,6 @@ public static class SpriteImportLayer
         {
             LoadFromManifest(root, result);
             LoadFromDirectFiles(root, result);
-
-            if (result.Count >= AssetSpecs.Length)
-            {
-                break;
-            }
         }
 
         return result;
@@ -65,31 +66,49 @@ public static class SpriteImportLayer
 
     private static void LoadFromDirectFiles(string root, IDictionary<string, Bitmap> result)
     {
-        foreach (var (key, _, files) in AssetSpecs)
+        foreach (var (key, _, files) in CoreAssetSpecs)
         {
-            if (result.ContainsKey(key))
+            if (TryLoadByNames(root, key, files, result))
+            {
+                continue;
+            }
+        }
+
+        foreach (var (key, files) in SupplementalFileSpecs)
+        {
+            if (TryLoadByNames(root, key, files, result))
+            {
+                continue;
+            }
+        }
+    }
+
+    private static bool TryLoadByNames(string root, string key, string[] files, IDictionary<string, Bitmap> result)
+    {
+        if (result.ContainsKey(key))
+        {
+            return true;
+        }
+
+        foreach (var fileName in files)
+        {
+            var fullPath = Path.Combine(root, fileName);
+            if (!File.Exists(fullPath))
             {
                 continue;
             }
 
-            foreach (var fileName in files)
+            var loaded = TryLoadBitmap(fullPath);
+            if (loaded is null)
             {
-                var fullPath = Path.Combine(root, fileName);
-                if (!File.Exists(fullPath))
-                {
-                    continue;
-                }
-
-                var loaded = TryLoadBitmap(fullPath);
-                if (loaded is null)
-                {
-                    continue;
-                }
-
-                result[key] = loaded;
-                break;
+                continue;
             }
+
+            result[key] = loaded;
+            return true;
         }
+
+        return false;
     }
 
     private static void LoadFromManifest(string root, IDictionary<string, Bitmap> result)
@@ -132,7 +151,7 @@ public static class SpriteImportLayer
                     return;
                 }
 
-                foreach (var (key, aliases, _) in AssetSpecs)
+                foreach (var (key, aliases, _) in CoreAssetSpecs)
                 {
                     if (result.ContainsKey(key))
                     {

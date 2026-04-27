@@ -2,6 +2,10 @@ Xenon2 sprite importer drop folder
 
 Put custom PNGs here and restart the game.
 
+Detected automatically (current files):
+- Master System - Xenon 2_ Megablast (PAL) - Miscellaneous - Font.png
+- Master System - Xenon 2_ Megablast (PAL) - Miscellaneous - Items.png
+
 Option A: direct file names
 - player.png
 - enemy.png

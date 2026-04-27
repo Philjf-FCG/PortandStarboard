@@ -4,6 +4,8 @@ namespace Xenon2Modern;
 
 public sealed class GameAssets : IDisposable
 {
+    public sealed record StageBackgroundMap(int Width, int Height, IReadOnlyList<ushort> Cells);
+
     private sealed class TextureField
     {
         private readonly byte[] _primary;
@@ -25,13 +27,26 @@ public sealed class GameAssets : IDisposable
         }
     }
 
-    private GameAssets(Bitmap player, Bitmap enemy, Bitmap bullet, Bitmap backgroundTile, Bitmap explosion)
+    private GameAssets(
+        Bitmap player,
+        Bitmap enemy,
+        Bitmap bullet,
+        Bitmap backgroundTile,
+        Bitmap explosion,
+        IReadOnlyList<Bitmap> itemIcons,
+        BitmapFontAtlas? hudFont,
+        IReadOnlyDictionary<int, IReadOnlyList<Bitmap>> stageBackgroundTiles,
+        IReadOnlyDictionary<int, StageBackgroundMap> stageBackgroundMaps)
     {
         Player = player;
         Enemy = enemy;
         Bullet = bullet;
         BackgroundTile = backgroundTile;
         Explosion = explosion;
+        ItemIcons = itemIcons;
+        HudFont = hudFont;
+        StageBackgroundTiles = stageBackgroundTiles;
+        StageBackgroundMaps = stageBackgroundMaps;
     }
 
     public Bitmap Player { get; }
@@ -43,6 +58,14 @@ public sealed class GameAssets : IDisposable
     public Bitmap BackgroundTile { get; }
 
     public Bitmap Explosion { get; }
+
+    public IReadOnlyList<Bitmap> ItemIcons { get; }
+
+    public BitmapFontAtlas? HudFont { get; }
+
+    public IReadOnlyDictionary<int, IReadOnlyList<Bitmap>> StageBackgroundTiles { get; }
+
+    public IReadOnlyDictionary<int, StageBackgroundMap> StageBackgroundMaps { get; }
 
     public static GameAssets LoadFromLegacyFiles(string assetRoot)
     {
@@ -61,6 +84,11 @@ public sealed class GameAssets : IDisposable
         var imported = SpriteImportLayer.LoadOverrides(assetRoot);
         try
         {
+            var itemIcons = ExtractItemIcons(imported);
+            var hudFont = ExtractHudFont(imported);
+            var stageBackgroundTiles = LoadStageBackgroundTiles(catalog);
+            var stageBackgroundMaps = LoadStageBackgroundMaps(catalog);
+
             var player = ApplyOverride(imported, "player", CreatePlayerSprite(playerField));
             var enemy = ApplyOverride(imported, "enemy", CreateEnemySprite(enemyField));
             var bullet = ApplyOverride(imported, "bullet", CreateBulletSprite(bulletField));
@@ -72,7 +100,11 @@ public sealed class GameAssets : IDisposable
                 enemy: enemy,
                 bullet: bullet,
                 backgroundTile: backgroundTile,
-                explosion: explosion
+                explosion: explosion,
+                itemIcons: itemIcons,
+                hudFont: hudFont,
+                stageBackgroundTiles: stageBackgroundTiles,
+                stageBackgroundMaps: stageBackgroundMaps
             );
         }
         finally
@@ -91,6 +123,18 @@ public sealed class GameAssets : IDisposable
         Bullet.Dispose();
         BackgroundTile.Dispose();
         Explosion.Dispose();
+        foreach (var icon in ItemIcons)
+        {
+            icon.Dispose();
+        }
+        HudFont?.Dispose();
+        foreach (var tileSet in StageBackgroundTiles.Values)
+        {
+            foreach (var tile in tileSet)
+            {
+                tile.Dispose();
+            }
+        }
     }
 
     private static byte[] GetBytes(LegacyAssetCatalog catalog, params string[] preferredSuffixes)
@@ -113,6 +157,254 @@ public sealed class GameAssets : IDisposable
         }
 
         return fallback;
+    }
+
+    private static IReadOnlyDictionary<int, IReadOnlyList<Bitmap>> LoadStageBackgroundTiles(LegacyAssetCatalog catalog)
+    {
+        var result = new Dictionary<int, IReadOnlyList<Bitmap>>();
+        for (var stage = 1; stage <= 5; stage++)
+        {
+            var mods = TryGetBytes(catalog, $"S{stage}/MODS.VGA");
+            if (mods is null)
+            {
+                continue;
+            }
+
+            var sprites = TryGetBytes(catalog, $"S{stage}/SPRITES.VGA");
+            var palette = LoadStagePalette(sprites);
+            var tiles = DecodeModsTiles(mods, palette);
+            if (tiles.Count > 0)
+            {
+                result[stage] = tiles;
+            }
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyDictionary<int, StageBackgroundMap> LoadStageBackgroundMaps(LegacyAssetCatalog catalog)
+    {
+        var result = new Dictionary<int, StageBackgroundMap>();
+
+        for (var stage = 1; stage <= 5; stage++)
+        {
+            var mapBlob = TryGetBytes(catalog, $"S{stage}/MAP.CMP");
+            if (mapBlob is null || mapBlob.Length < 8)
+            {
+                continue;
+            }
+
+            var entries = DecodeStageMapEntries(mapBlob);
+            if (entries.Count == 0)
+            {
+                continue;
+            }
+
+            var mapWidth = InferMapWidth(entries.Count);
+            if (mapWidth <= 0)
+            {
+                continue;
+            }
+
+            var mapHeight = (entries.Count + mapWidth - 1) / mapWidth;
+            var totalCells = mapWidth * mapHeight;
+            var cells = new ushort[totalCells];
+            for (var i = 0; i < Math.Min(entries.Count, totalCells); i++)
+            {
+                cells[i] = entries[i];
+            }
+
+            result[stage] = new StageBackgroundMap(mapWidth, mapHeight, cells);
+        }
+
+        return result;
+    }
+
+    private static int InferMapWidth(int entryCount)
+    {
+        if (entryCount <= 0)
+        {
+            return 0;
+        }
+
+        var candidates = new[] { 20, 22, 24, 26, 28, 30, 32, 34, 36, 40 };
+        var bestWidth = 24;
+        var bestScore = int.MaxValue;
+
+        foreach (var width in candidates)
+        {
+            var remainder = entryCount % width;
+            var closenessBias = Math.Abs(width - 24);
+            var score = (remainder * 10) + closenessBias;
+            if (score < bestScore)
+            {
+                bestScore = score;
+                bestWidth = width;
+            }
+        }
+
+        return bestWidth;
+    }
+
+    private static List<ushort> DecodeStageMapEntries(byte[] mapBlob)
+    {
+        var data = mapBlob;
+        if (TryDecodeByteRun1(mapBlob, out var decoded, out var consumed) &&
+            consumed >= mapBlob.Length - 16 &&
+            decoded.Length >= mapBlob.Length)
+        {
+            data = decoded;
+        }
+
+        var entries = new List<ushort>(data.Length / 2);
+        for (var i = 0; i + 1 < data.Length; i += 2)
+        {
+            var attributes = data[i];
+            var tileIndex = data[i + 1];
+            entries.Add((ushort)((attributes << 8) | tileIndex));
+        }
+
+        return entries;
+    }
+
+    private static bool TryDecodeByteRun1(byte[] input, out byte[] output, out int consumed)
+    {
+        var decoded = new List<byte>(input.Length * 2);
+        var i = 0;
+        while (i < input.Length)
+        {
+            var control = unchecked((sbyte)input[i++]);
+            if (control >= 0)
+            {
+                var count = control + 1;
+                if (i + count > input.Length)
+                {
+                    break;
+                }
+
+                for (var n = 0; n < count; n++)
+                {
+                    decoded.Add(input[i + n]);
+                }
+
+                i += count;
+                continue;
+            }
+
+            if (control == -128)
+            {
+                continue;
+            }
+
+            if (i >= input.Length)
+            {
+                break;
+            }
+
+            var value = input[i++];
+            var repeatCount = 1 - control;
+            for (var n = 0; n < repeatCount; n++)
+            {
+                decoded.Add(value);
+            }
+        }
+
+        consumed = i;
+        output = decoded.ToArray();
+        return output.Length > 0;
+    }
+
+    private static byte[]? TryGetBytes(LegacyAssetCatalog catalog, string suffix)
+    {
+        var match = catalog.Files.FirstOrDefault(file =>
+            file.RelativePath.Replace('\\', '/').EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+
+        return match is null ? null : catalog.ReadBytes(match);
+    }
+
+    private static List<Color> LoadStagePalette(byte[]? spritesBlob)
+    {
+        var palette = new List<Color> { Color.Transparent };
+        if (spritesBlob is not null)
+        {
+            for (var i = 0; i < Math.Min(18, spritesBlob.Length); i += 2)
+            {
+                var word = (spritesBlob[i] << 8) | spritesBlob[i + 1];
+                var r = ((word >> 8) & 0x7) * 36;
+                var g = ((word >> 4) & 0x7) * 36;
+                var b = (word & 0x7) * 36;
+                palette.Add(Color.FromArgb(255, r, g, b));
+            }
+        }
+
+        while (palette.Count < 16)
+        {
+            var v = Math.Min(255, palette.Count * 18);
+            palette.Add(Color.FromArgb(255, v, v, v));
+        }
+
+        return palette;
+    }
+
+    private static List<Bitmap> DecodeModsTiles(byte[] modsBlob, List<Color> palette)
+    {
+        var start = DetectModsStart(modsBlob);
+        var payloadLength = modsBlob.Length - start;
+        var tileCount = payloadLength / 128;
+        var tiles = new List<Bitmap>(tileCount);
+
+        for (var i = 0; i < tileCount; i++)
+        {
+            var tileStart = start + (i * 128);
+            var bitmap = new Bitmap(16, 16, PixelFormat.Format32bppArgb);
+
+            for (var y = 0; y < 16; y++)
+            {
+                var row = tileStart + (y * 8);
+                var p0 = (modsBlob[row] << 8) | modsBlob[row + 1];
+                var p1 = (modsBlob[row + 2] << 8) | modsBlob[row + 3];
+                var p2 = (modsBlob[row + 4] << 8) | modsBlob[row + 5];
+                var p3 = (modsBlob[row + 6] << 8) | modsBlob[row + 7];
+
+                for (var x = 0; x < 16; x++)
+                {
+                    var shift = 15 - x;
+                    var index =
+                        ((p0 >> shift) & 1)
+                        | (((p1 >> shift) & 1) << 1)
+                        | (((p2 >> shift) & 1) << 2)
+                        | (((p3 >> shift) & 1) << 3);
+
+                    if (index == 0)
+                    {
+                        bitmap.SetPixel(x, y, Color.Transparent);
+                    }
+                    else
+                    {
+                        bitmap.SetPixel(x, y, palette[index]);
+                    }
+                }
+            }
+
+            tiles.Add(bitmap);
+        }
+
+        return tiles;
+    }
+
+    private static int DetectModsStart(byte[] blob)
+    {
+        if (blob.Length >= 0x80 && blob.Take(0x80).All(value => value == 0) && (blob.Length - 0x80) % 128 == 0)
+        {
+            return 0x80;
+        }
+
+        if (blob.Length % 128 == 0)
+        {
+            return 0;
+        }
+
+        return blob.Length % 128;
     }
 
     private static Bitmap CreatePlayerSprite(TextureField field)
@@ -310,6 +602,121 @@ public sealed class GameAssets : IDisposable
         var g = (int)(a.G + ((b.G - a.G) * t));
         var bl = (int)(a.B + ((b.B - a.B) * t));
         return Color.FromArgb(r, g, bl);
+    }
+
+    private static List<Bitmap> ExtractItemIcons(IDictionary<string, Bitmap> imported)
+    {
+        if (!imported.Remove("items-sheet", out var sheet))
+        {
+            return [];
+        }
+
+        try
+        {
+            return SliceItemsSheet(sheet);
+        }
+        finally
+        {
+            sheet.Dispose();
+        }
+    }
+
+    private static BitmapFontAtlas? ExtractHudFont(IDictionary<string, Bitmap> imported)
+    {
+        if (!imported.Remove("font-sheet", out var sheet))
+        {
+            return null;
+        }
+
+        try
+        {
+            return BitmapFontAtlas.TryCreateFromSmsSheet(sheet);
+        }
+        finally
+        {
+            sheet.Dispose();
+        }
+    }
+
+    private static List<Bitmap> SliceItemsSheet(Bitmap source)
+    {
+        const int cellWidth = 16;
+        const int cellHeight = 16;
+
+        var bg = source.GetPixel(0, 0);
+        var icons = new List<Bitmap>();
+        var columns = (int)Math.Ceiling(source.Width / (double)cellWidth);
+        var rows = (int)Math.Ceiling(source.Height / (double)cellHeight);
+
+        for (var row = 0; row < rows; row++)
+        {
+            for (var col = 0; col < columns; col++)
+            {
+                var srcX = col * cellWidth;
+                var srcY = row * cellHeight;
+                if (srcX >= source.Width || srcY >= source.Height)
+                {
+                    continue;
+                }
+
+                var readW = Math.Min(cellWidth, source.Width - srcX);
+                var readH = Math.Min(cellHeight, source.Height - srcY);
+                var icon = new Bitmap(cellWidth, cellHeight, PixelFormat.Format32bppArgb);
+
+                using (var g = Graphics.FromImage(icon))
+                {
+                    g.Clear(Color.Transparent);
+                    g.DrawImage(source, new Rectangle(0, 0, readW, readH), new Rectangle(srcX, srcY, readW, readH), GraphicsUnit.Pixel);
+                }
+
+                RemoveColor(icon, bg);
+                if (CountOpaquePixels(icon) < 40)
+                {
+                    icon.Dispose();
+                    continue;
+                }
+
+                icons.Add(icon);
+            }
+        }
+
+        return icons;
+    }
+
+    private static void RemoveColor(Bitmap bitmap, Color bg)
+    {
+        const int tolerance = 8;
+
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (Math.Abs(pixel.R - bg.R) <= tolerance &&
+                    Math.Abs(pixel.G - bg.G) <= tolerance &&
+                    Math.Abs(pixel.B - bg.B) <= tolerance)
+                {
+                    bitmap.SetPixel(x, y, Color.Transparent);
+                }
+            }
+        }
+    }
+
+    private static int CountOpaquePixels(Bitmap bitmap)
+    {
+        var count = 0;
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                if (bitmap.GetPixel(x, y).A > 10)
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
     }
 
     private static Bitmap ApplyOverride(IDictionary<string, Bitmap> imported, string key, Bitmap fallback)

@@ -76,7 +76,15 @@ public sealed class GameForm : Form
 
     private void OnGameKeyDown(object? sender, KeyEventArgs e)
     {
+        var wasDown = _keysDown.Contains(e.KeyCode);
         _keysDown.Add(e.KeyCode);
+
+        if (!wasDown && e.KeyCode == Keys.F3)
+        {
+            _world.ToggleDebugOverlay();
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
     }
 
     private void OnGameKeyUp(object? sender, KeyEventArgs e)

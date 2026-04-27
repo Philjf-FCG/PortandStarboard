@@ -40,6 +40,23 @@ All generated analysis artifacts are in `decompilation/`:
   - Search paths include `user-sprites/` at workspace root, `assets/user-sprites/`, `assets/imports/`, or `XENON2_SPRITES_PATH`.
   - Supports direct PNG files (`player.png`, `enemy.png`, `bullet.png`, `background.png`, `explosion.png`).
   - Supports sprite sheet import with `sprite-manifest.json` + `sheet.png`.
+- Supplemental imports are now active:
+  - `...Font.png` is parsed into a bitmap HUD font atlas and used for HUD/game-over text.
+  - `...Items.png` is auto-sliced into item icons and used in HUD icon strips/life markers.
+- `SPRITES.VGA` unpacking format has now been partially recovered:
+  - 8-word little-endian header per sprite record
+  - 5 planar 32-bit row streams (mask + 4 color planes), big-endian bit order
+  - record size: `16 + (height * 20)`
+- Unpacker tool: `tools/unpack_vga_sprites.py`
+  - Example: `c:/DevProjects/Decompile/.venv/Scripts/python.exe tools/unpack_vga_sprites.py --root xenon2/Xenon2Me --out art_debug/unpacked`
+  - Outputs contact sheets and per-sprite PNGs for `S1..S5/SPRITES.VGA`
+- `MODS.VGA` unpacking format has now been recovered as stage tile graphics:
+  - 4-plane planar `16x16` tiles
+  - tile size: `128 bytes` (8 bytes per row for 16 rows)
+  - possible `0x80` zero-byte file prefix before tile data
+- Unpacker tool: `tools/unpack_vga_mods.py`
+  - Example: `c:/DevProjects/Decompile/.venv/Scripts/python.exe tools/unpack_vga_mods.py --root xenon2/Xenon2Me --out art_debug/mods_unpacked`
+  - Outputs `S*_mods_sheet.png` and per-tile PNG folders for `S1..S5/MODS.VGA`
 - For pixel-perfect original sprites, we still need either:
   - documented/decompressed native sprite format specs, or
   - an alternate source with extracted bitmaps/sprite sheets.
