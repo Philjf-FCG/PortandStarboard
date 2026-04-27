@@ -62,3 +62,5 @@ C:\DevProjects\Decompile\Xenon2Modern\bin\x64\Release\net10.0-windows\assets\ami
 C:\DevProjects\Decompile\Xenon2Modern\bin\x64\Release\net10.0-windows\assets\amiga\disk1\Xenon2\S\startup-sequence
 C:\DevProjects\Decompile\Xenon2Modern\bin\x64\Release\net10.0-windows\assets\amiga\disk1\Xenon2\Xenon2
 C:\DevProjects\Decompile\Xenon2Modern\obj\x64\Release\net10.0-windows\Xenon2Modern.sourcelink.json
+C:\DevProjects\Decompile\Xenon2Modern\bin\x64\Release\net10.0-windows\assets\amiga\disk1.adf
+C:\DevProjects\Decompile\Xenon2Modern\bin\x64\Release\net10.0-windows\assets\amiga\disk2.adf

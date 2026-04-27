@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Xenon2Modern")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b95640eb3f6b1d62e92a0783b47bcff08e5134c5")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3432632fc8f9029ae95dd012ead8839a000ebc21")]
 [assembly: System.Reflection.AssemblyProductAttribute("Xenon2Modern")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Xenon2Modern")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

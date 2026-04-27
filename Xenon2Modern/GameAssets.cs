@@ -80,13 +80,17 @@ public sealed class GameAssets : IDisposable
 
     public IReadOnlyDictionary<int, StageBackgroundMap> StageBackgroundMaps { get; }
 
-    public static GameAssets LoadFromLegacyFiles(string assetRoot)
+    public static GameAssets LoadFromLegacyFiles(string assetRoot, bool preferGameExecutable = true)
     {
         var catalog = LegacyAssetCatalog.Load(assetRoot);
         var dosSprites = GetBytes(catalog, "S1/SPRITES.VGA", "S2/SPRITES.VGA", "X2SPR.DAT");
         var dosMods = GetBytes(catalog, "S1/MODS.VGA", "S2/MODS.VGA", "GR.DAT");
         var dosWeapons = GetBytes(catalog, "X2WEAPS.DAT", "SHOP.DAT", "GR.DAT");
-        var amigaCode = GetBytes(catalog, "amiga/disk1/Xenon2/DJ99", "amiga/disk1/Xenon2/Xenon2");
+        // Some ADF sets boot a crack intro (DJ99) before launching Xenon2.
+        // Prefer the actual game executable to avoid pulling intro-only byte patterns.
+        var amigaCode = preferGameExecutable
+            ? GetBytes(catalog, "amiga/disk1/Xenon2/Xenon2", "amiga/disk1/Xenon2/DJ99")
+            : GetBytes(catalog, "amiga/disk1/Xenon2/DJ99", "amiga/disk1/Xenon2/Xenon2");
 
         var playerField = new TextureField(dosSprites, amigaCode);
         var enemyField = new TextureField(dosMods, amigaCode);

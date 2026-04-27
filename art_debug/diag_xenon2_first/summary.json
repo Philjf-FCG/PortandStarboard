@@ -1,0 +1,235 @@
+{
+  "GeneratedAtUtc": "2026-04-27T14:39:16.7988294Z",
+  "AssetRoot": "C:\\DevProjects\\Decompile\\Xenon2Modern\\bin\\x64\\Release\\net10.0-windows\\assets",
+  "OutputRoot": "C:\\DevProjects\\Decompile\\art_debug\\diag_xenon2_first",
+  "AmigaSourceOrder": "xenon2-first",
+  "ArtifactDigests": [
+    {
+      "RelativePath": "maps/stage1_map_preview.png",
+      "Sha256": "9d55048d3a1161a9dc4c6c6ce59cc642a637f0f135a979f7052f170a97341d79",
+      "SizeBytes": 24129
+    },
+    {
+      "RelativePath": "maps/stage2_map_preview.png",
+      "Sha256": "64c09f5e64ce46c02603604d16fe20a48b87c204225648f93d15a5e8824f3cde",
+      "SizeBytes": 26007
+    },
+    {
+      "RelativePath": "maps/stage3_map_preview.png",
+      "Sha256": "fd1d15d4a39e15fcc3a65787afc9bee9a245fb7dcb14a668ef0876b04baeb2c9",
+      "SizeBytes": 22771
+    },
+    {
+      "RelativePath": "maps/stage4_map_preview.png",
+      "Sha256": "19786a771ed76636a3118cacaaedbd54dbc68b9fadd93e38a49569fbcc61683d",
+      "SizeBytes": 27091
+    },
+    {
+      "RelativePath": "maps/stage5_map_preview.png",
+      "Sha256": "4ca5836ace6de0ee86e4fc6c68f0ff1bc0fa9b1f952835d1dc186e22b40acc8a",
+      "SizeBytes": 27117
+    },
+    {
+      "RelativePath": "sprites/background.png",
+      "Sha256": "37acf26cd9ca1910795ab3d2463a1dea085d741159be6beeccc21c918bac35a8",
+      "SizeBytes": 44372
+    },
+    {
+      "RelativePath": "sprites/bullet.png",
+      "Sha256": "8531c51aef43d42357dc539facc78c3e4ae00058fc557667c10ac9a4607a405f",
+      "SizeBytes": 418
+    },
+    {
+      "RelativePath": "sprites/enemy.png",
+      "Sha256": "e65cd825a948cd87719382aa98fce40b8dd78e216c00a0a212189cc5e63e6d0b",
+      "SizeBytes": 2871
+    },
+    {
+      "RelativePath": "sprites/explosion.png",
+      "Sha256": "3e85cbd6c24167e7fe95e3ebb2dd3966e54e52254d6827e751520a8a76a8fa0c",
+      "SizeBytes": 6110
+    },
+    {
+      "RelativePath": "sprites/player.png",
+      "Sha256": "23b1b5a7aff0fd5f3a21144faf19bae4249235967685077163e4ba2c4390cbad",
+      "SizeBytes": 2680
+    }
+  ],
+  "StageMaps": [
+    {
+      "Stage": 1,
+      "Width": 13,
+      "Height": 288,
+      "CellCount": 3744,
+      "Decoder": "amiga13x288-byterun-byte-col",
+      "MinTile": 0,
+      "MaxTile": 61,
+      "SampleEntries": [
+        "0xC000",
+        "0x0005",
+        "0x0030",
+        "0x8000",
+        "0x000C",
+        "0x0003",
+        "0x8001",
+        "0x0008",
+        "0x0005",
+        "0x0005",
+        "0x0008",
+        "0x0012",
+        "0x0002",
+        "0x002C",
+        "0x0002",
+        "0x4000",
+        "0x002D",
+        "0x000C",
+        "0x0003",
+        "0x0003",
+        "0x0008",
+        "0x0005",
+        "0x0001",
+        "0x0008"
+      ]
+    },
+    {
+      "Stage": 2,
+      "Width": 13,
+      "Height": 288,
+      "CellCount": 3744,
+      "Decoder": "amiga13x288-raw-byte-col",
+      "MinTile": 0,
+      "MaxTile": 63,
+      "SampleEntries": [
+        "0x0007",
+        "0x0037",
+        "0x0032",
+        "0x0028",
+        "0x001A",
+        "0x002F",
+        "0x002F",
+        "0x001F",
+        "0x0004",
+        "0x000C",
+        "0x000D",
+        "0x0005",
+        "0x0003",
+        "0x4000",
+        "0xC001",
+        "0xC000",
+        "0x4001",
+        "0x8001",
+        "0xC000",
+        "0x0000",
+        "0xC000",
+        "0x8000",
+        "0xC001",
+        "0x4001"
+      ]
+    },
+    {
+      "Stage": 3,
+      "Width": 13,
+      "Height": 288,
+      "CellCount": 3744,
+      "Decoder": "amiga13x288-byterun-byte-col",
+      "MinTile": 0,
+      "MaxTile": 56,
+      "SampleEntries": [
+        "0x8000",
+        "0x0001",
+        "0x0006",
+        "0x002A",
+        "0x0026",
+        "0x0024",
+        "0x002C",
+        "0x0001",
+        "0x002A",
+        "0x0002",
+        "0x0034",
+        "0x002B",
+        "0x0009",
+        "0x0000",
+        "0x0011",
+        "0x0005",
+        "0x002A",
+        "0x0026",
+        "0x0024",
+        "0xC001",
+        "0x0001",
+        "0x002A",
+        "0x4001",
+        "0x0001"
+      ]
+    },
+    {
+      "Stage": 4,
+      "Width": 13,
+      "Height": 288,
+      "CellCount": 3744,
+      "Decoder": "amiga13x288-raw-byte-col",
+      "MinTile": 0,
+      "MaxTile": 63,
+      "SampleEntries": [
+        "0x0029",
+        "0x0017",
+        "0x0007",
+        "0x0035",
+        "0x001F",
+        "0x0016",
+        "0x0005",
+        "0x400B",
+        "0x001E",
+        "0x0032",
+        "0x0004",
+        "0x0001",
+        "0x0003",
+        "0xC000",
+        "0x0010",
+        "0xC001",
+        "0x4000",
+        "0x0000",
+        "0x8001",
+        "0x0001",
+        "0x0000",
+        "0xC000",
+        "0x4000",
+        "0x4000"
+      ]
+    },
+    {
+      "Stage": 5,
+      "Width": 13,
+      "Height": 288,
+      "CellCount": 3744,
+      "Decoder": "amiga13x288-raw-byte-col",
+      "MinTile": 0,
+      "MaxTile": 63,
+      "SampleEntries": [
+        "0x0000",
+        "0x0016",
+        "0x0006",
+        "0x0026",
+        "0x0005",
+        "0x0009",
+        "0x000A",
+        "0x0011",
+        "0x0010",
+        "0x001A",
+        "0x0003",
+        "0x0022",
+        "0x000A",
+        "0xC03F",
+        "0x0000",
+        "0x8001",
+        "0x0001",
+        "0x4001",
+        "0x4001",
+        "0x0000",
+        "0xC000",
+        "0x4000",
+        "0x0000",
+        "0xC001"
+      ]
+    }
+  ]
+}

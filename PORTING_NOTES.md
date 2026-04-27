@@ -34,7 +34,10 @@ All generated analysis artifacts are in `decompilation/`:
 - The previous migration path produced scrambled visuals because sprite generation sampled arbitrary byte windows from legacy blobs.
 - Asset generation now uses deterministic texture synthesis from both available sources:
   - DOS data files (`S1/SPRITES.VGA`, `S1/MODS.VGA`, `X2WEAPS.DAT`)
-  - Amiga extracted binaries (`amiga/disk1/Xenon2/DJ99`, `amiga/disk1/Xenon2/Xenon2`)
+  - Amiga extracted binaries (`amiga/disk1/Xenon2/Xenon2`, fallback `amiga/disk1/Xenon2/DJ99`)
+- Note on cracked disk sets:
+  - Some images boot `DJ99` first via startup-sequence, then chain to `Xenon2`.
+  - Runtime byte-derived synthesis now prefers `Xenon2` specifically to avoid crack-intro contamination.
 - Result: stable, coherent in-game art (player, enemy, bullets, explosions, background) with no scrambling artifacts.
 - Importer layer added: custom sprites now override generated art when found.
   - Search paths include `user-sprites/` at workspace root, `assets/user-sprites/`, `assets/imports/`, or `XENON2_SPRITES_PATH`.
@@ -93,6 +96,23 @@ Run:
 ```powershell
 .\run_xenon2_winuae.ps1
 ```
+
+## Deterministic Art/Map A-B Export
+- Added headless diagnostics mode in `Xenon2Modern` for repeatable sprite/map exports.
+- Use this to compare executable-byte source order without relying on manual screenshots.
+
+Run both variants from workspace root:
+
+```powershell
+dotnet run --project Xenon2Modern\Xenon2Modern.csproj -c Release -p:Platform=x64 -- --export-assets art_debug\diag_xenon2_first --amiga-source-order xenon2-first
+dotnet run --project Xenon2Modern\Xenon2Modern.csproj -c Release -p:Platform=x64 -- --export-assets art_debug\diag_dj99_first --amiga-source-order dj99-first
+```
+
+- Each export writes PNG artifacts and `summary.json` with SHA-256 digests.
+- Current comparison result:
+  - Sprite hashes differ for `player.png`, `enemy.png`, `explosion.png`.
+  - Sprite hashes match for `bullet.png`, `background.png`.
+  - Stage map previews and selected map decoders are unchanged across source-order variants.
 
 ## Sprite/Map Pipeline Evidence From Original EXE
 - Added deterministic extractor `tools/analyze_xenon2_asset_table.py`.
